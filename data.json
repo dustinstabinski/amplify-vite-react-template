@@ -1,0 +1,32 @@
+{
+    "Dustin": {
+        "name": "",
+        "data": [
+            {
+                "date": "12-2-2025",
+                "price": 0
+            }
+        ],
+        "cashedOut": false
+    },
+    "Jonah": {
+        "name": "Ollie baby bucks",
+        "data": [
+            {
+                "date": "12-2-2025",
+                "price": 0
+            }
+        ],
+        "cashedOut": false
+    },
+    "Trey": {
+        "name": "",
+        "data": [
+            {
+                "date": "12-2-2025",
+                "price": 0
+            }
+        ],
+        "cashedOut": false
+    }
+}

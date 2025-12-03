@@ -1,15 +1,17 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 
 /*== STEP 1 ===============================================================
-The section below creates a Todo database table with a "content" field. Try
-adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any user authenticated via an API key can "create", "read",
-"update", and "delete" any "Todo" records.
+The section below creates a Currency database table matching the data.json structure.
+Each currency has a name, data array (with date and price entries), and cashedOut status.
+The authorization rule below specifies that any user authenticated via an API key can
+"create", "read", "update", and "delete" any "Currency" records.
 =========================================================================*/
 const schema = a.schema({
-  Todo: a
+  Currency: a
     .model({
-      content: a.string(),
+      name: a.string(),
+      data: a.json(),
+      cashedOut: a.boolean(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
 });
