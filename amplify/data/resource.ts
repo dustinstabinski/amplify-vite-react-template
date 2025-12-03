@@ -1,8 +1,9 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 
 /*== STEP 1 ===============================================================
-The section below creates a Currency database table matching the data.json structure.
-Each currency has a name, data array (with date and price entries), and cashedOut status.
+The section below creates a Currency database table.
+Each currency has a name and cashedOut status. Price history is derived
+on the fly in the frontend using deterministic hashing, so it is not stored.
 The authorization rule below specifies that any user authenticated via an API key can
 "create", "read", "update", and "delete" any "Currency" records.
 =========================================================================*/
@@ -10,8 +11,8 @@ const schema = a.schema({
   Currency: a
     .model({
       name: a.string(),
-      data: a.json(),
       cashedOut: a.boolean(),
+      finalAmount: a.float(),
     })
     .authorization((allow) => [allow.publicApiKey()]),
 });

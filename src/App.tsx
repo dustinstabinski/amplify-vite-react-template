@@ -21,7 +21,7 @@ const client = generateClient<Schema>();
 
 // Currency ID to price range mapping
 const CURRENCY_RANGES: Record<string, { min: number; max: number }> = {
-  "87f973b1-16cf-4898-afce-893ed40cdd45": { min: 0, max: 50 },
+  "87f973b1-16cf-4898-afce-893ed40cdd45": { min: 48, max: 52 },
   "739c42bd-43c7-4746-9b36-985b1fd38a69": { min: 0, max: 50 },
   "e8fe1d84-27dd-4045-aa78-704ce03cfb5c": { min: 0, max: 50 },
 };
@@ -36,6 +36,7 @@ interface BoxData {
   title: string;
   price: number;
   cashedOut: boolean;
+  finalAmount: number | null;
   history: HistoryEntry[];
 }
 
@@ -78,23 +79,20 @@ function generateSeededRandom(seed: number, min: number, max: number): number {
 }
 
 function mapCurrencyToBox(currency: Schema["Currency"]["type"]): BoxData {
-  const rawData = (currency.data ?? []) as unknown;
-  const dataArray = Array.isArray(rawData) ? rawData : [];
+  // Generate history for the last 10 days (today + previous 9 days)
+  const range = CURRENCY_RANGES[currency.id] || { min: 0, max: 50 };
+  const history: HistoryEntry[] = [];
 
-  const history: HistoryEntry[] = dataArray.map((entry, index) => {
-    const e = entry as { price?: unknown };
-    const price =
-      typeof e.price === "number"
-        ? e.price
-        : 0;
+  for (let daysAgo = 0; daysAgo < 10; daysAgo++) {
+    const dateString = getRelativeDateString(daysAgo);
+    // Combine currency ID with date string for unique hash per currency
+    const hashInput = `${currency.id}-${dateString}`;
+    const dateHash = hashString(hashInput);
+    const price = generateSeededRandom(dateHash, range.min, range.max);
+    history.push({ date: dateString, price });
+  }
 
-    // Today for index 0, yesterday for index 1, etc.
-    const date = getRelativeDateString(index);
-
-    return { date, price };
-  });
-
-  const price = history.length > 0 ? history[0].price : 0;
+  const price = history[0]?.price ?? 0;
 
   return {
     id: currency.id,
@@ -104,6 +102,7 @@ function mapCurrencyToBox(currency: Schema["Currency"]["type"]): BoxData {
         : "Untitled",
     price,
     cashedOut: Boolean(currency.cashedOut),
+    finalAmount: currency.finalAmount ?? null,
     history,
   };
 }
@@ -113,41 +112,14 @@ function App() {
   const [openModal, setOpenModal] = useState<string | null>(null);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
   const [historyBoxId, setHistoryBoxId] = useState<string | null>(null);
+  const [warningStep, setWarningStep] = useState<number>(1);
 
   useEffect(() => {
     async function loadCurrencies() {
       const { data } = await client.models.Currency.list();
-      
-      // Process each currency to ensure we have backfilled prices for the past 10 days
-      const updatedCurrencies = await Promise.all(
-        data.map(async (currency) => {
-          // Get the price range for this currency (default to 0-50)
-          const range = CURRENCY_RANGES[currency.id] || { min: 0, max: 50 };
 
-          // Build a backfilled array for the last 10 days (today + previous 9 days)
-          const backfilledData: Array<{ date: string; price: number }> = [];
-          for (let daysAgo = 0; daysAgo < 10; daysAgo++) {
-            const dateString = getRelativeDateString(daysAgo);
-            const dateHash = hashString(dateString);
-            const price = generateSeededRandom(dateHash, range.min, range.max);
-            backfilledData.push({ date: dateString, price });
-          }
-
-          // Update the currency in the database with the backfilled data
-          await client.models.Currency.update({
-            id: currency.id,
-            data: backfilledData as unknown as Record<string, unknown>,
-          });
-
-          // Return updated currency for mapping
-          return {
-            ...currency,
-            data: backfilledData as unknown as Record<string, unknown>,
-          };
-        })
-      );
-      
-      setBoxes(updatedCurrencies.map(mapCurrencyToBox));
+      // Just map currencies; prices and history are derived on the fly
+      setBoxes(data.map(mapCurrencyToBox));
     }
 
     void loadCurrencies();
@@ -164,28 +136,55 @@ function App() {
   const handleCloseModal = () => {
     setOpenModal(null);
     setSelectedBoxId(null);
+    setWarningStep(1);
   };
 
   const handleContinue = async () => {
     if (selectedBoxId !== null) {
       const box = boxes.find((b) => b.id === selectedBoxId);
       if (box) {
-        alert(`$${box.price.toFixed(2)}`);
-        // Persist cashedOut in the backend
+        // Persist cashedOut and finalAmount in the backend
         await client.models.Currency.update({
           id: selectedBoxId,
           cashedOut: true,
+          finalAmount: box.price,
         });
 
-        // Update the cashedOut status locally
+        // Update the cashedOut status and finalAmount locally
         setBoxes((prevBoxes) =>
           prevBoxes.map((b) =>
-            b.id === selectedBoxId ? { ...b, cashedOut: true } : b
+            b.id === selectedBoxId
+              ? { ...b, cashedOut: true, finalAmount: box.price }
+              : b
           )
         );
         handleCloseModal();
       }
     }
+  };
+
+  const getWarningMessage = (currencyName?: string) => {
+    switch (warningStep) {
+      case 1:
+        return currencyName
+          ? `Are you sure you want to cash out your ${currencyName}?`
+          : "Are you sure you want to cash out?";
+      case 2:
+        return "Are you actually Bobbi?";
+      case 3:
+        return "Are you sure because if not Bobbi has the right to hunt you down?";
+      case 4:
+      default:
+        return "Ok last warning. You sure?";
+    }
+  };
+
+  const handleContinueClick = async () => {
+    if (warningStep < 4) {
+      setWarningStep((prev) => prev + 1);
+      return;
+    }
+    await handleContinue();
   };
 
   const handleViewHistory = (boxId: string) => {
@@ -203,6 +202,14 @@ function App() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box sx={{ textAlign: "center", mb: 4 }}>
+        <Typography variant="h3" component="h3" sx={{ mb: 2 }}>
+          bobbi's birthday gift 2025
+        </Typography>
+        <Typography variant="h5" component="h5" sx={{ maxWidth: "800px", mx: "auto" }}>
+          You have been gifted undisclosed amounts of three different currencies. Every day, the conversion from the currency to $USD changes based on the market. It is up to you when you'd like to cash out, but once you do there's no going back. You can continue to check the conversions even after you cash out to see how badly you fucked up. Good luck
+        </Typography>
+      </Box>
       <Stack spacing={4}>
         <Box
           sx={{
@@ -236,7 +243,9 @@ function App() {
                 onClick={() => handleCashOut(box.id)}
                 disabled={box.cashedOut}
               >
-                {box.cashedOut ? "Cashed out" : "Cash out"}
+                {box.cashedOut && box.finalAmount !== null
+                  ? `Cashed out $${box.finalAmount.toFixed(2)}`
+                  : "Cash out"}
               </Button>
               <Button
                 variant="outlined"
@@ -272,13 +281,15 @@ function App() {
             Confirm Cash Out
           </Typography>
           <Typography id="cash-out-modal-description">
-            Are you sure you want to cash out?
+            {getWarningMessage(
+              boxes.find((b) => b.id === selectedBoxId)?.title
+            )}
           </Typography>
           <Box sx={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
             <Button variant="outlined" onClick={handleCloseModal}>
               Cancel
             </Button>
-            <Button variant="contained" onClick={handleContinue}>
+            <Button variant="contained" onClick={handleContinueClick}>
               Continue
             </Button>
           </Box>
