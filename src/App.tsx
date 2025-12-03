@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box,
   Typography,
@@ -8,37 +8,83 @@ import {
   Stack,
   Container,
 } from "@mui/material";
+import type { Schema } from "../amplify/data/resource";
+import { generateClient } from "aws-amplify/data";
+
+const client = generateClient<Schema>();
 
 interface BoxData {
-  id: number;
+  id: string;
   title: string;
   price: number;
+  cashedOut: boolean;
 }
 
-const boxes: BoxData[] = [
-  { id: 1, title: "Box 1", price: 99.99 },
-  { id: 2, title: "Box 2", price: 149.99 },
-  { id: 3, title: "Box 3", price: 199.99 },
-];
+function mapCurrencyToBox(currency: Schema["Currency"]["type"]): BoxData {
+  const rawData = (currency.data ?? []) as unknown;
+  let price = 0;
+
+  if (Array.isArray(rawData) && rawData.length > 0) {
+    const first = rawData[0] as { price?: unknown };
+    if (typeof first?.price === "number") {
+      price = first.price;
+    }
+  }
+
+  return {
+    id: currency.id,
+    title: currency.name && currency.name.trim().length > 0 ? currency.name : "Untitled",
+    price,
+    cashedOut: Boolean(currency.cashedOut),
+  };
+}
 
 function App() {
-  const [openModal, setOpenModal] = useState<number | null>(null);
-  const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
+  const [boxes, setBoxes] = useState<BoxData[]>([]);
+  const [openModal, setOpenModal] = useState<string | null>(null);
+  const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
 
-  const handleCashOut = (price: number) => {
-    setSelectedPrice(price);
-    setOpenModal(price);
+  useEffect(() => {
+    async function loadCurrencies() {
+      const { data } = await client.models.Currency.list()
+      setBoxes(data.map(mapCurrencyToBox));
+    }
+
+    void loadCurrencies();
+  }, []);
+
+  const handleCashOut = (boxId: string) => {
+    const box = boxes.find((b) => b.id === boxId);
+    if (box && !box.cashedOut) {
+      setSelectedBoxId(boxId);
+      setOpenModal(boxId);
+    }
   };
 
   const handleCloseModal = () => {
     setOpenModal(null);
-    setSelectedPrice(null);
+    setSelectedBoxId(null);
   };
 
-  const handleContinue = () => {
-    if (selectedPrice !== null) {
-      alert(`$${selectedPrice.toFixed(2)}`);
-      handleCloseModal();
+  const handleContinue = async () => {
+    if (selectedBoxId !== null) {
+      const box = boxes.find((b) => b.id === selectedBoxId);
+      if (box) {
+        alert(`$${box.price.toFixed(2)}`);
+        // Persist cashedOut in the backend
+        await client.models.Currency.update({
+          id: selectedBoxId,
+          cashedOut: true,
+        });
+
+        // Update the cashedOut status locally
+        setBoxes((prevBoxes) =>
+          prevBoxes.map((b) =>
+            b.id === selectedBoxId ? { ...b, cashedOut: true } : b
+          )
+        );
+        handleCloseModal();
+      }
     }
   };
 
@@ -78,9 +124,10 @@ function App() {
               </Typography>
               <Button
                 variant="contained"
-                onClick={() => handleCashOut(box.price)}
+                onClick={() => handleCashOut(box.id)}
+                disabled={box.cashedOut}
               >
-                Cash out
+                {box.cashedOut ? "Cashed out" : "Cash out"}
               </Button>
               <Button
                 variant="outlined"
