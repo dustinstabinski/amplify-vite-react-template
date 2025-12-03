@@ -22,7 +22,7 @@ const client = generateClient<Schema>();
 // Currency ID to price range mapping
 const CURRENCY_RANGES: Record<string, { min: number; max: number }> = {
   "87f973b1-16cf-4898-afce-893ed40cdd45": { min: 48, max: 52 },
-  "739c42bd-43c7-4746-9b36-985b1fd38a69": { min: 0, max: 50 },
+  "739c42bd-43c7-4746-9b36-985b1fd38a69": { min: -10, max: 50 },
   "e8fe1d84-27dd-4045-aa78-704ce03cfb5c": { min: 0, max: 50 },
 };
 
@@ -201,8 +201,8 @@ function App() {
       : null;
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ textAlign: "center", mb: 4 }}>
+    <Container sx={{ py: 4, height: '100%', overflow: 'auto' }}>
+      <Box sx={{ textAlign: "center", mb: 4, display: "flex", flexDirection: 'column' }}>
         <Typography variant="h3" component="h3" sx={{ mb: 2 }}>
           bobbi's birthday gift 2025
         </Typography>
@@ -270,11 +270,12 @@ function App() {
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: 400,
             p: 4,
             display: "flex",
             flexDirection: "column",
             gap: 2,
+            width: { xs: "90%", sm: "400px" },
+            maxWidth: "500px",
           }}
         >
           <Typography id="cash-out-modal" variant="h6" component="h2">
@@ -308,7 +309,8 @@ function App() {
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: 500,
+            width: { xs: "90%", sm: "400px" },
+            maxWidth: "500px",
             p: 4,
             display: "flex",
             flexDirection: "column",
