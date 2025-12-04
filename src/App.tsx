@@ -68,14 +68,16 @@ function hashString(str: string): number {
 
 // Seeded random number generator
 function seededRandom(seed: number): number {
-  const x = Math.sin(seed) * 10000;
+  const x = Math.sin(seed) * 1000;
   return x - Math.floor(x);
 }
 
-// Generate a random number between min and max using a seed
+// Generate a random number between min and max using a seed (with decimals)
 function generateSeededRandom(seed: number, min: number, max: number): number {
   const random = seededRandom(seed);
-  return Math.floor(random * (max - min + 1)) + min;
+  const value = random * (max - min) + min;
+  // Round to 2 decimal places for currency
+  return Math.round(value * 100) / 100;
 }
 
 function mapCurrencyToBox(currency: Schema["Currency"]["type"]): BoxData {
